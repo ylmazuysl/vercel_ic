@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Çanta Dağıtım ve Mekan Takip Sistemi (Canlı)</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { display: flex; flex-direction: column; height: 100vh; background-color: #f4f6f9; }
+        header { background: #2c3e50; color: white; padding: 15px; text-align: center; font-size: 1.2rem; font-weight: bold; }
+        
+        .main-container { display: flex; flex: 1; height: calc(100vh - 54px); overflow: hidden; }
+        #map { flex: 2; height: 100%; z-index: 1; }
+        
+        .sidebar { flex: 1; min-width: 360px; max-width: 450px; background: white; border-left: 1px solid #ccc; display: flex; flex-direction: column; overflow-y: auto; }
+        .panel { padding: 20px; border-bottom: 1px solid #eee; }
+        h3 { margin-bottom: 15px; color: #34495e; border-left: 4px solid #3498db; padding-left: 8px; }
+        
+        .form-group { margin-bottom: 12px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9rem; color: #555; }
+        .form-group input, .form-group select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+        .grid-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        
+        button { background: #3498db; color: white; padding: 10px; border: none; border-radius: 4px; cursor: pointer; width: 100%; font-weight: bold; transition: 0.2s; }
+        button:hover { background: #2980b9; }
+        
+        #genelRapor { font-size: 0.9rem; font-weight: bold; color: #2c3e50; margin-top: 5px; line-height: 1.5; }
+        
+        @media (max-width: 768px) {
+            .main-container { flex-direction: column; overflow: initial; height: auto; }
+            #map { height: 400px; flex: none; }
+            .sidebar { max-width: 100%; min-width: 100%; flex: none; overflow-y: visible; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>💼 Çanta Dağıtım & Canlı Konum Takip</header>
+
+    <div class="main-container">
+        <div id="map"></div>
+
+        <div class="sidebar">
+            <div class="panel">
+                <h3>Yeni Mekan Kaydet</h3>
+                <p style="font-size: 0.8rem; color: #7f8c8d; margin-bottom: 10px;">Haritaya tıklayarak enlem/boylamı otomatik doldurabilirsiniz.</p>
+                <div class="form-group">
+                    <label>Mekan Adı</label>
+                    <input type="text" id="mekanAdi" placeholder="Örn: Moda Butik">
+                </div>
+                <div class="grid-inputs">
+                    <div class="form-group"><label>Enlem (Lat)</label><input type="number" id="lat" step="any"></div>
+                    <div class="form-group"><label>Boylam (Lng)</label><input type="number" id="lng" step="any"></div>
+                </div>
+                <button onclick="mekanEkle()">Mekanı Buluta Kaydet</button>
+            </div>
+
+            <div class="panel">
+                <h3>Günlük Çanta Teslimatı Gir</h3>
+                <div class="form-group">
+                    <label>Mekan Seçin</label>
+                    <select id="teslimatMekan"></select>
+                </div>
+                <div class="form-group">
+                    <label>Teslim Tarihi</label>
+                    <input type="date" id="teslimatTarihi">
+                </div>
+                <div class="grid-inputs">
+                    <div class="form-group"><label>Deri (180 TL)</label><input type="number" id="c_deri" value="0"></div>
+                    <div class="form-group"><label>Kumaş (150 TL)</label><input type="number" id="c_kumas" value="0"></div>
+                    <div class="form-group"><label>Süet (200 TL)</label><input type="number" id="c_suet" value="0"></div>
+                    <div class="form-group"><label>Spor (120 TL)</label><input type="number" id="c_spor" value="0"></div>
+                </div>
+                <button onclick="teslimatKaydet()" style="background: #2ecc71;">Teslimatı Kaydet</button>
+            </div>
+
+            <div class="panel">
+                <h3>Tarih Aralığı Filtrele</h3>
+                <div class="grid-inputs" style="margin-bottom: 10px;">
+                    <div><label style="font-size:0.8rem;">Başlangıç</label><input type="date" id="filtreBaslangic"></div>
+                    <div><label style="font-size:0.8rem;">Bitiş</label><input type="date" id="filtreBitis"></div>
+                </div>
+                <button onclick="raporla()" style="background: #9b59b6; margin-bottom: 10px;">Raporu Yenile</button>
+                <div id="genelRapor"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <script>
+        // Bağlantı Bilgilerin Tanımlandı
+        const SUPABASE_URL = "https://mwembozxxydorvsnukeo.supabase.co"; 
+        const SUPABASE_KEY = "sb_publishable_eb8kgw2Z-iuAJX6XebOppA_pJd9ngkm";
+
+        const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        const FIYATLAR = { deri: 180, kumas: 150, suet: 200, spor: 120 };
+
+        // Haritayı Başlat
+        const map = L.map('map').setView([41.0082, 28.9784], 12);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
+
+        map.on('click', function(e) {
+            document.getElementById('lat').value = e.latlng.lat.toFixed(6);
+            document.getElementById('lng').value = e.latlng.lng.toFixed(6);
+        });
+
+        window.onload = async function() {
+            const bugun = new Date().toISOString().split('T')[0];
+            document.getElementById('teslimatTarihi').value = bugun;
+            document.getElementById('filtreBaslangic').value = bugun;
+            document.getElementById('filtreBitis').value = bugun;
+
+            await verileriYukle();
+        };
+
+        // Veri tabanından tüm mekanları ve teslimatları çekip haritayı günceller
+        async function verileriYukle() {
+            let { data: mekanlar, error: mErr } = await _supabase.from('mekanlar').select('*');
+            if (mErr) { console.error("Mekan çekme hatası:", mErr); return; }
+
+            let { data: teslimatlar, error: tErr } = await _supabase.from('teslimatlar').select('*');
+            if (tErr) { console.error("Teslimat çekme hatası:", tErr); return; }
+
+            // Seçim listesini doldur
+            const select = document.getElementById('teslimatMekan');
+            select.innerHTML = '';
+            if (mekanlar && mekanlar.length > 0) {
+                mekanlar.forEach(m => {
+                    let opt = document.createElement('option');
+                    opt.value = m.id;
+                    opt.innerText = m.ad;
+                    select.appendChild(opt);
+                });
+            }
+
+            // Harita pinlerini temizle ve yeniden ekle
+            map.eachLayer((layer) => {
+                if (!!layer.toGeoJSON && !layer.toString().includes('TileLayer')) { map.removeLayer(layer); }
+            });
+
+            if (mekanlar) {
+                mekanlar.forEach(m => {
+                    let mTeslimat = teslimatlar ? teslimatlar.filter(t => t.mekan_id == m.id) : [];
+                    let toplamCiro = mTeslimat.reduce((sum, c) => sum + parseFloat(c.toplam), 0);
+                    let tDeri = mTeslimat.reduce((sum, c) => sum + parseInt(c.deri || 0), 0);
+                    let tKumas = mTeslimat.reduce((sum, c) => sum + parseInt(c.kumas || 0), 0);
+                    let tSuet = mTeslimat.reduce((sum, c) => sum + parseInt(c.suet || 0), 0);
+                    let tSpor = mTeslimat.reduce((sum, c) => sum + parseInt(c.spor || 0), 0);
+
+                    let popupIcerik = `
+                        <div style="font-family:sans-serif; min-width:160px;">
+                            <strong style="font-size:1rem; color:#2c3e50;">${m.ad}</strong><br><hr style="margin:5px 0;">
+                            💼 Deri: ${tDeri} Adet<br>
+                            🧵 Kumaş: ${tKumas} Adet<br>
+                            ✨ Süet: ${tSuet} Adet<br>
+                            👟 Spor: ${tSpor} Adet<br>
+                            <hr style="margin:5px 0;">
+                            <span style="color:#27ae60; font-weight:bold;">Toplam: ${toplamCiro} TL</span>
+                        </div>
+                    `;
+                    L.marker([m.lat, m.lng]).addTo(map).bindPopup(popupIcerik);
+                });
+            }
+        }
+
+        // Buluta yeni mekan kaydetme
+        async function mekanEkle() {
+            const ad = document.getElementById('mekanAdi').value;
+            const lat = parseFloat(document.getElementById('lat').value);
+            const lng = parseFloat(document.getElementById('lng').value);
+
+            if(!ad || !lat || !lng) { alert('Lütfen tüm alanları doldurun!'); return; }
+
+            const { error } = await _supabase.from('mekanlar').insert([{ ad: ad, lat: lat, lng: lng }]);
+            
+            if(error) {
+                alert('Hata oluştu! Supabase panelinden RLS politikasını kapatmayı (Disable RLS) unutmayın.');
+                console.error(error);
+            } else {
+                document.getElementById('mekanAdi').value = '';
+                document.getElementById('lat').value = '';
+                document.getElementById('lng').value = '';
+                await verileriYukle();
+                alert(`${ad} başarıyla bulut veri tabanına kaydedildi!`);
+            }
+        }
+
+        // Buluta yeni teslimat kaydetme
+        async function teslimatKaydet() {
+            const mekanId = parseInt(document.getElementById('teslimatMekan').value);
+            const tarih = document.getElementById('teslimatTarihi').value;
+            const deri = parseInt(document.getElementById('c_deri').value) || 0;
+            const kumas = parseInt(document.getElementById('c_kumas').value) || 0;
+            const suet = parseInt(document.getElementById('c_suet').value) || 0;
+            const spor = parseInt(document.getElementById('c_spor').value) || 0;
+
+            if(!mekanId || !tarih) { alert('Mekan ve tarih seçin!'); return; }
+
+            const toplam = (deri * FIYATLAR.deri) + (kumas * FIYATLAR.kumas) + (suet * FIYATLAR.suet) + (spor * FIYATLAR.spor);
+
+            const { error } = await _supabase.from('teslimatlar').insert([
+                { mekan_id: mekanId, tarih: tarih, deri: deri, kumas: kumas, suet: suet, spor: spor, toplam: toplam }
+            ]);
+
+            if(error) {
+                alert('Teslimat kaydedilemedi. RLS politikasını kontrol edin.');
+                console.error(error);
+            } else {
+                document.getElementById('c_deri').value = 0;
+                document.getElementById('c_kumas').value = 0;
+                document.getElementById('c_suet').value = 0;
+                document.getElementById('c_spor').value = 0;
+                await verileriYukle();
+                alert('Teslimat buluta işlendi ve harita güncellendi!');
+            }
+        }
+
+        // Canlı veri tabanından tarih aralığı raporu çekme
+        async function raporla() {
+            const baslangic = document.getElementById('filtreBaslangic').value;
+            const bitis = document.getElementById('filtreBitis').value;
+
+            let { data: filtrelenmis, error } = await _supabase
+                .from('teslimatlar')
+                .select('*')
+                .gte('tarih', baslangic)
+                .lte('tarih', bitis);
+
+            if(error) { console.error(error); return; }
+
+            let toplamCiro = filtrelenmis.reduce((sum, c) => sum + parseFloat(c.toplam), 0);
+            let toplamCanta = filtrelenmis.reduce((sum, c) => sum + (parseInt(c.deri||0) + parseInt(c.kumas||0) + parseInt(c.suet||0) + parseInt(c.spor||0)), 0);
+
+            document.getElementById('genelRapor').innerHTML = `
+                <strong>Seçili Dönem Özeti:</strong><br>
+                📦 Dağıtılan Çanta: ${toplamCanta} adet<br>
+                💰 Toplam Ciro: <span style="color:#2ecc71">${toplamCiro} TL</span>
+            `;
+        }
+    </script>
+</body>
+</html>
