@@ -3,86 +3,194 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Çanta Dağıtım ve Mekan Takip Sistemi (Canlı)</title>
+    <title>Çanta Otomasyon & Ön Muhasebe Sistemi</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        body { display: flex; flex-direction: column; height: 100vh; background-color: #f4f6f9; }
-        header { background: #2c3e50; color: white; padding: 15px; text-align: center; font-size: 1.2rem; font-weight: bold; }
+        body { display: flex; flex-direction: column; height: 100vh; background-color: #f4f6f9; overflow: hidden; }
+        header { background: #2c3e50; color: white; padding: 12px; text-align: center; font-size: 1.2rem; font-weight: bold; flex-shrink: 0; }
         
-        .main-container { display: flex; flex: 1; height: calc(100vh - 54px); overflow: hidden; }
+        .app-layout { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+        .top-section { flex: 1; display: flex; overflow: hidden; position: relative; min-height: 200px; }
         #map { flex: 2; height: 100%; z-index: 1; }
+        .sidebar { flex: 1; min-width: 360px; max-width: 420px; background: white; border-left: 1px solid #ccc; display: flex; flex-direction: column; overflow-y: auto; }
+        .panel { padding: 12px 15px; border-bottom: 1px solid #eee; }
+        h3 { margin-bottom: 10px; color: #34495e; border-left: 4px solid #3498db; padding-left: 8px; font-size: 1rem; }
         
-        .sidebar { flex: 1; min-width: 360px; max-width: 450px; background: white; border-left: 1px solid #ccc; display: flex; flex-direction: column; overflow-y: auto; }
-        .panel { padding: 20px; border-bottom: 1px solid #eee; }
-        h3 { margin-bottom: 15px; color: #34495e; border-left: 4px solid #3498db; padding-left: 8px; }
+        .form-group { margin-bottom: 8px; }
+        .form-group label { display: block; margin-bottom: 3px; font-weight: 600; font-size: 0.8rem; color: #555; }
+        .form-group input, .form-group select { width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.85rem; }
+        .grid-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .grid-5 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr; gap: 4px; }
         
-        .form-group { margin-bottom: 12px; }
-        .form-group label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 0.9rem; color: #555; }
-        .form-group input, .form-group select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
-        .grid-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        
-        button { background: #3498db; color: white; padding: 10px; border: none; border-radius: 4px; cursor: pointer; width: 100%; font-weight: bold; transition: 0.2s; }
+        button { background: #3498db; color: white; padding: 8px; border: none; border-radius: 4px; cursor: pointer; width: 100%; font-weight: bold; font-size: 0.85rem; transition: 0.2s; }
         button:hover { background: #2980b9; }
         
-        #genelRapor { font-size: 0.9rem; font-weight: bold; color: #2c3e50; margin-top: 5px; line-height: 1.5; }
+        #genelRapor { font-size: 0.85rem; font-weight: bold; color: #2c3e50; margin-top: 5px; line-height: 1.4; }
+        .resizer { height: 8px; background: #cbd5e1; cursor: ns-resize; border-top: 1px solid #94a3b8; border-bottom: 1px solid #94a3b8; flex-shrink: 0; }
+        .resizer:hover { background: #94a3b8; }
+
+        .bottom-section { height: 40vh; min-height: 100px; max-height: 80vh; background: white; padding: 15px; display: flex; flex-direction: column; flex-shrink: 0; }
+        .table-wrapper { flex: 1; overflow-y: auto; overflow-x: auto; border: 1px solid #e2e8f0; margin-top: 8px; }
+
+        .mekan-liste-kapsayici { position: absolute; top: 10px; left: 50px; z-index: 1000; background: white; border-radius: 6px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); max-height: 200px; width: 220px; display: flex; flex-direction: column; }
+        .mekan-liste-baslik { background: #34495e; color: white; padding: 8px 12px; font-weight: bold; font-size: 0.85rem; border-top-left-radius: 6px; border-top-right-radius: 6px; cursor: pointer; display: flex; justify-content: space-between; }
+        .mekan-liste-icerik { list-style: none; overflow-y: auto; padding: 5px 0; }
+        .mekan-liste-icerik li { padding: 6px 12px; font-size: 0.8rem; cursor: pointer; border-bottom: 1px solid #f1f1f1; transition: 0.2s; color: #333;}
+        .mekan-liste-icerik li:hover { background: #e8f4f8; color: #2980b9; font-weight: bold; }
+
+        .stok-kapsayici { position: absolute; top: 10px; right: 440px; z-index: 1000; background: rgba(255, 255, 255, 0.95); padding: 10px 12px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.15); display: flex; gap: 12px; border: 1px solid #34495e; }
+        .stok-kart { text-align: center; font-size: 0.75rem; color: #2c3e50; font-weight: bold; }
+        .stok-kart span { display: block; font-size: 1rem; margin-top: 2px; color: #e74c3c; }
+
+        .custom-pin-label { background: rgba(44, 62, 80, 0.9); border: none; border-radius: 4px; color: white; font-weight: bold; padding: 2px 6px; font-size: 0.75rem; text-align: center; }
+
+        .detay-tablo { width: 100%; border-collapse: collapse; font-size: 0.85rem; white-space: nowrap; }
+        .detay-tablo th, .detay-tablo td { border: 1px solid #cbd5e1; padding: 10px; text-align: left; }
+        .detay-tablo th { background-color: #2c3e50; color: white; font-weight: 600; position: sticky; top: 0; z-index: 10; }
+        .detay-tablo tr:nth-child(even) { background-color: #f8fafc; }
+        .detay-tablo tr:hover { background-color: #f1f5f9; }
         
+        .iade-text { color: #c0392b; font-weight: bold; }
+        .satis-text { color: #27ae60; font-weight: bold; }
+
+        .mekan-ozet-kutusu { font-size: 0.85rem; color: #2c3e50; font-weight: normal; margin-top: 4px; background: #eef2f7; padding: 6px 12px; border-radius: 4px; border-left: 3px solid #27ae60; display: inline-block; }
+
         @media (max-width: 768px) {
-            .main-container { flex-direction: column; overflow: initial; height: auto; }
-            #map { height: 400px; flex: none; }
-            .sidebar { max-width: 100%; min-width: 100%; flex: none; overflow-y: visible; }
+            body { overflow: auto; height: auto; }
+            .app-layout { height: auto; overflow: visible; }
+            .top-section { flex-direction: column; height: auto; }
+            #map { height: 300px; flex: none; }
+            .sidebar { max-width: 100%; min-width: 100%; flex: none; height: auto; }
+            .resizer { display: none; }
+            .bottom-section { height: auto; max-height: none; flex: none; }
+            .stok-kapsayici { position: static; margin: 10px; right: auto; top: auto; flex-wrap: wrap; }
         }
     </style>
 </head>
 <body>
 
-    <header>💼 Çanta Dağıtım & Canlı Konum Takip</header>
+    <header>💼 Çanta Dağıtım Ticari Otomasyonu & Cari Takip</header>
 
-    <div class="main-container">
-        <div id="map"></div>
-
-        <div class="sidebar">
-            <div class="panel">
-                <h3>Yeni Mekan Kaydet</h3>
-                <p style="font-size: 0.8rem; color: #7f8c8d; margin-bottom: 10px;">Haritaya tıklayarak enlem/boylamı otomatik doldurabilirsiniz.</p>
-                <div class="form-group">
-                    <label>Mekan Adı</label>
-                    <input type="text" id="mekanAdi" placeholder="Örn: Moda Butik">
+    <div class="app-layout">
+        <div class="top-section" id="topSection">
+            
+            <div class="mekan-liste-kapsayici">
+                <div class="mekan-liste-baslik" onclick="toggleMekanListesi()">
+                    <span>📍 Kayıtlı Mekanlar</span>
+                    <span id="listeOk">&#9662;</span>
                 </div>
-                <div class="grid-inputs">
-                    <div class="form-group"><label>Enlem (Lat)</label><input type="number" id="lat" step="any"></div>
-                    <div class="form-group"><label>Boylam (Lng)</label><input type="number" id="lng" step="any"></div>
-                </div>
-                <button onclick="mekanEkle()">Mekanı Buluta Kaydet</button>
+                <ul class="mekan-liste-icerik" id="mekanListeIcerik"></ul>
             </div>
 
-            <div class="panel">
-                <h3>Günlük Çanta Teslimatı Gir</h3>
-                <div class="form-group">
-                    <label>Mekan Seçin</label>
-                    <select id="teslimatMekan"></select>
-                </div>
-                <div class="form-group">
-                    <label>Teslim Tarihi</label>
-                    <input type="date" id="teslimatTarihi">
-                </div>
-                <div class="grid-inputs">
-                    <div class="form-group"><label>Deri (180 TL)</label><input type="number" id="c_deri" value="0"></div>
-                    <div class="form-group"><label>Kumaş (150 TL)</label><input type="number" id="c_kumas" value="0"></div>
-                    <div class="form-group"><label>Süet (200 TL)</label><input type="number" id="c_suet" value="0"></div>
-                    <div class="form-group"><label>Spor (120 TL)</label><input type="number" id="c_spor" value="0"></div>
-                </div>
-                <button onclick="teslimatKaydet()" style="background: #2ecc71;">Teslimatı Kaydet</button>
+            <div class="stok-kapsayici">
+                <div class="stok-kart">🐆 Leopar <span id="stok_leopar">0</span></div>
+                <div class="stok-kart">👜 Resting <span id="stok_normal">0</span></div>
+                <div class="stok-kart">💎 Mi Cat <span id="stok_micat">0</span></div>
+                <div class="stok-kart">📐 Körüklü <span id="stok_k_altkoruklu">0</span></div>
+                <div class="stok-kart">🌿 Hambez <span id="stok_hambez">0</span></div>
             </div>
 
-            <div class="panel">
-                <h3>Tarih Aralığı Filtrele</h3>
-                <div class="grid-inputs" style="margin-bottom: 10px;">
-                    <div><label style="font-size:0.8rem;">Başlangıç</label><input type="date" id="filtreBaslangic"></div>
-                    <div><label style="font-size:0.8rem;">Bitiş</label><input type="date" id="filtreBitis"></div>
+            <div id="map"></div>
+
+            <div class="sidebar">
+                <div class="panel" style="background: #f8fafc;">
+                    <h3 style="border-left-color: #e67e22;">Depo Başlangıç Stoğu Gir</h3>
+                    <div class="grid-5">
+                        <div class="form-group"><label>Leo</label><input type="number" id="b_leopar" value="100" onchange="stokHesapla()"></div>
+                        <div class="form-group"><label>Rest</label><input type="number" id="b_normal" value="100" onchange="stokHesapla()"></div>
+                        <div class="form-group"><label>MiCat</label><input type="number" id="b_micat" value="100" onchange="stokHesapla()"></div>
+                        <div class="form-group"><label>Körük</label><input type="number" id="b_k_altkoruklu" value="100" onchange="stokHesapla()"></div>
+                        <div class="form-group"><label>Ham</label><input type="number" id="b_hambez" value="100" onchange="stokHesapla()"></div>
+                    </div>
                 </div>
-                <button onclick="raporla()" style="background: #9b59b6; margin-bottom: 10px;">Raporu Yenile</button>
-                <div id="genelRapor"></div>
+
+                <div class="panel">
+                    <h3>Yeni Mekan Kaydet</h3>
+                    <div class="form-group">
+                        <label>Mekan Adı</label>
+                        <input type="text" id="mekanAdi" placeholder="Mekan Adı">
+                    </div>
+                    <div class="grid-inputs">
+                        <div class="form-group"><label>Enlem (Lat)</label><input type="number" id="lat" step="any"></div>
+                        <div class="form-group"><label>Boylam (Lng)</label><input type="number" id="lng" step="any"></div>
+                    </div>
+                    <button onclick="mekanEkle()">Mekanı Kaydet</button>
+                </div>
+
+                <div class="panel">
+                    <h3>Dağıtım & İade Girişi</h3>
+                    <div class="grid-inputs">
+                        <div class="form-group"><label>Mekan</label><select id="teslimatMekan"></select></div>
+                        <div class="form-group"><label>Tarih</label><input type="date" id="teslimatTarihi"></div>
+                    </div>
+                    
+                    <p style="font-size:0.75rem; font-weight:bold; color:#2c3e50; margin:3px 0;">Teslim Edilen Adetler (+):</p>
+                    <div class="grid-5">
+                        <div class="form-group"><label>Leo</label><input type="number" id="c_leopar" value="0"></div>
+                        <div class="form-group"><label>Rest</label><input type="number" id="c_normal" value="0"></div>
+                        <div class="form-group"><label>MiCat</label><input type="number" id="c_micat" value="0"></div>
+                        <div class="form-group"><label>Körük</label><input type="number" id="c_k_altkoruklu" value="0"></div>
+                        <div class="form-group"><label>Ham</label><input type="number" id="c_hambez" value="0"></div>
+                    </div>
+
+                    <p style="font-size:0.75rem; font-weight:bold; color:#c0392b; margin:3px 0;">İade Alınan Adetler (-):</p>
+                    <div class="grid-5">
+                        <div class="form-group"><input type="number" id="i_leopar" value="0"></div>
+                        <div class="form-group"><input type="number" id="i_normal" value="0"></div>
+                        <div class="form-group"><input type="number" id="i_micat" value="0"></div>
+                        <div class="form-group"><input type="number" id="i_k_altkoruklu" value="0"></div>
+                        <div class="form-group"><input type="number" id="i_hambez" value="0"></div>
+                    </div>
+                    <button onclick="teslimatKaydet()" style="background: #2ecc71;">Dağıtımı/İadeyi İşle</button>
+                </div>
+
+                <div class="panel" style="background:#fcfcfc;">
+                    <h3 style="border-left-color: #f1c40f;">Mekandan Ödeme Al (Tahsilat)</h3>
+                    <div class="grid-inputs">
+                        <div class="form-group"><label>Alınan Tutar (TL)</label><input type="number" id="tahsilatMiktar" placeholder="Örn: 5000"></div>
+                        <div class="form-group"><label>Tahsilat Tarihi</label><input type="date" id="tahsilatTarihi"></div>
+                    </div>
+                    <button onclick="tahsilatKaydet()" style="background: #f1c40f; color:#2c3e50;">Tahsilatı Sunucuya Kaydet</button>
+                </div>
+
+                <div class="panel">
+                    <h3>Dönem Filtreleri</h3>
+                    <div class="form-group"><select id="filtreMekanSelect" onchange="haritaVeTabloYenile()"></select></div>
+                    <div class="grid-inputs">
+                        <input type="date" id="filtreBaslangic"><input type="date" id="filtreBitis">
+                    </div>
+                    <button onclick="raporla()" style="background: #9b59b6; margin-top:5px;">Sorgula</button>
+                    <div id="genelRapor"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="resizer" id="panelResizer"></div>
+
+        <div class="bottom-section" id="bottomSection">
+            <div class="tablo-baslik-alan" id="tabloBaslikKapsayici">
+                <h3 style="border:none; margin:0;" id="tabloBaslik">Yükleniyor...</h3>
+            </div>
+            <div class="table-wrapper">
+                <table class="detay-tablo">
+                    <thead>
+                        <tr>
+                            <th>Tarih</th>
+                            <th>Mekan Adı</th>
+                            <th>🐆 Kanvas Leopar (180 TL)</th>
+                            <th>👜 Kanvas Resting (150 TL)</th>
+                            <th>💎 Kanvas Mi Cat (150 TL)</th>
+                            <th>📐 Kanvas Alt Körüklü (100 TL)</th>
+                            <th>🌿 Hambez (50 TL)</th>
+                            <th>📦 Net Çanta</th>
+                            <th>💰 İşlem Tutarı</th>
+                            <th>💵 Alınan Ödeme</th>
+                            <th>🚨 Güncel Kalan Borç</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabloGövde"></tbody>
+                </table>
             </div>
         </div>
     </div>
@@ -91,16 +199,21 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
     <script>
-        // Bağlantı Bilgilerin Tanımlandı
         const SUPABASE_URL = "https://mwembozxxydorvsnukeo.supabase.co"; 
         const SUPABASE_KEY = "sb_publishable_eb8kgw2Z-iuAJX6XebOppA_pJd9ngkm";
-
         const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-        const FIYATLAR = { deri: 180, kumas: 150, suet: 200, spor: 120 };
+        
+        // 5 Modelin Güncel Fiyat Dağılımı 🚀
+        const FIYATLAR = { leopar: 180, normal: 150, micat: 150, k_altkoruklu: 100, hambez: 50 };
+        
+        let globalMekanlar = [];
+        let globalIslemler = [];
 
-        // Haritayı Başlat
-        const map = L.map('map').setView([41.0082, 28.9784], 12);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
+        const map = L.map('map').setView([41.0082, 28.9784], 11);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+        const maviIcon = L.divIcon({ html: `<svg width="20" height="20" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#3498db"/></svg>`, className: '', iconSize: [20, 20], iconAnchor: [10, 20] });
+        const yesilIcon = L.divIcon({ html: `<svg width="20" height="20" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#2ecc71"/></svg>`, className: '', iconSize: [20, 20], iconAnchor: [10, 20] });
 
         map.on('click', function(e) {
             document.getElementById('lat').value = e.latlng.lat.toFixed(6);
@@ -108,137 +221,327 @@
         });
 
         window.onload = async function() {
-            const bugun = new Date().toISOString().split('T')[0];
-            document.getElementById('teslimatTarihi').value = bugun;
-            document.getElementById('filtreBaslangic').value = bugun;
-            document.getElementById('filtreBitis').value = bugun;
+            const bugunStr = new Date().toISOString().split('T')[0];
+            const ayinBasiStr = bugunStr.substring(0, 8) + "01";
+            document.getElementById('teslimatTarihi').value = bugunStr;
+            document.getElementById('tahsilatTarihi').value = bugunStr;
+            document.getElementById('filtreBaslangic').value = ayinBasiStr;
+            document.getElementById('filtreBitis').value = bugunStr;
 
+            initResizer();
             await verileriYukle();
         };
 
-        // Veri tabanından tüm mekanları ve teslimatları çekip haritayı günceller
-        async function verileriYukle() {
-            let { data: mekanlar, error: mErr } = await _supabase.from('mekanlar').select('*');
-            if (mErr) { console.error("Mekan çekme hatası:", mErr); return; }
-
-            let { data: teslimatlar, error: tErr } = await _supabase.from('teslimatlar').select('*');
-            if (tErr) { console.error("Teslimat çekme hatası:", tErr); return; }
-
-            // Seçim listesini doldur
-            const select = document.getElementById('teslimatMekan');
-            select.innerHTML = '';
-            if (mekanlar && mekanlar.length > 0) {
-                mekanlar.forEach(m => {
-                    let opt = document.createElement('option');
-                    opt.value = m.id;
-                    opt.innerText = m.ad;
-                    select.appendChild(opt);
-                });
-            }
-
-            // Harita pinlerini temizle ve yeniden ekle
-            map.eachLayer((layer) => {
-                if (!!layer.toGeoJSON && !layer.toString().includes('TileLayer')) { map.removeLayer(layer); }
+        function initResizer() {
+            const resizer = document.getElementById('panelResizer');
+            const bottomSection = document.getElementById('bottomSection');
+            
+            resizer.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                document.addEventListener('mousemove', handleMouseMove);
+                document.addEventListener('mouseup', handleMouseUp);
             });
 
-            if (mekanlar) {
-                mekanlar.forEach(m => {
-                    let mTeslimat = teslimatlar ? teslimatlar.filter(t => t.mekan_id == m.id) : [];
-                    let toplamCiro = mTeslimat.reduce((sum, c) => sum + parseFloat(c.toplam), 0);
-                    let tDeri = mTeslimat.reduce((sum, c) => sum + parseInt(c.deri || 0), 0);
-                    let tKumas = mTeslimat.reduce((sum, c) => sum + parseInt(c.kumas || 0), 0);
-                    let tSuet = mTeslimat.reduce((sum, c) => sum + parseInt(c.suet || 0), 0);
-                    let tSpor = mTeslimat.reduce((sum, c) => sum + parseInt(c.spor || 0), 0);
-
-                    let popupIcerik = `
-                        <div style="font-family:sans-serif; min-width:160px;">
-                            <strong style="font-size:1rem; color:#2c3e50;">${m.ad}</strong><br><hr style="margin:5px 0;">
-                            💼 Deri: ${tDeri} Adet<br>
-                            🧵 Kumaş: ${tKumas} Adet<br>
-                            ✨ Süet: ${tSuet} Adet<br>
-                            👟 Spor: ${tSpor} Adet<br>
-                            <hr style="margin:5px 0;">
-                            <span style="color:#27ae60; font-weight:bold;">Toplam: ${toplamCiro} TL</span>
-                        </div>
-                    `;
-                    L.marker([m.lat, m.lng]).addTo(map).bindPopup(popupIcerik);
-                });
+            function handleMouseMove(e) {
+                const windowHeight = window.innerHeight;
+                const newHeight = windowHeight - e.clientY - 12; 
+                if (newHeight > 80 && newHeight < windowHeight * 0.8) { bottomSection.style.height = newHeight + 'px'; }
+            }
+            function handleMouseUp() {
+                document.removeEventListener('mousemove', handleMouseMove);
+                document.removeEventListener('mouseup', handleMouseUp);
+                map.invalidateSize();
             }
         }
 
-        // Buluta yeni mekan kaydetme
+        async function verileriYukle() {
+            let { data: mekanlar } = await _supabase.from('mekanlar').select('*').order('ad', { ascending: true });
+            globalMekanlar = mekanlar || [];
+
+            let { data: teslimatlar } = await _supabase.from('teslimatlar').select('*').order('tarih', { ascending: false });
+            globalIslemler = teslimatlar || [];
+
+            selectleriDoldur();
+            solMekanListesiGuncelle();
+            haritaVeTabloYenile();
+            stokHesapla();
+        }
+
+        function stokHesapla() {
+            const b_leo = parseInt(document.getElementById('b_leopar').value) || 0;
+            const b_nor = parseInt(document.getElementById('b_normal').value) || 0;
+            const b_mic = parseInt(document.getElementById('b_micat').value) || 0;
+            const b_kor = parseInt(document.getElementById('b_k_altkoruklu').value) || 0;
+            const b_ham = parseInt(document.getElementById('b_hambez').value) || 0;
+
+            let sevk_leo = globalIslemler.reduce((sum, item) => sum + (parseInt(item.leopar) || 0), 0);
+            let sevk_nor = globalIslemler.reduce((sum, item) => sum + (parseInt(item.normal) || 0), 0);
+            let sevk_mic = globalIslemler.reduce((sum, item) => sum + (parseInt(item.micat) || 0), 0);
+            let sevk_kor = globalIslemler.reduce((sum, item) => sum + (parseInt(item.k_altkoruklu) || 0), 0);
+            let sevk_ham = globalIslemler.reduce((sum, item) => sum + (parseInt(item.hambez) || 0), 0);
+
+            document.getElementById('stok_leopar').innerText = b_leo - sevk_leo;
+            document.getElementById('stok_normal').innerText = b_nor - sevk_nor;
+            document.getElementById('stok_micat').innerText = b_mic - sevk_mic;
+            document.getElementById('stok_k_altkoruklu').innerText = b_kor - sevk_kor;
+            document.getElementById('stok_hambez').innerText = b_ham - sevk_ham;
+        }
+
+        function selectleriDoldur() {
+            const kSel = document.getElementById('teslimatMekan');
+            const fSel = document.getElementById('filtreMekanSelect');
+            const seciliK = kSel.value;
+            const seciliF = fSel.value;
+
+            kSel.innerHTML = '';
+            fSel.innerHTML = '<option value="hepsi">-- Hepsi (Bütün Mekanlar) --</option>';
+
+            globalMekanlar.forEach(m => {
+                kSel.innerHTML += `<option value="${m.id}">${m.ad}</option>`;
+                fSel.innerHTML += `<option value="${m.id}">${m.ad}</option>`;
+            });
+
+            if(seciliK) kSel.value = seciliK;
+            if(seciliF) fSel.value = seciliF;
+        }
+
+        function solMekanListesiGuncelle() {
+            const ul = document.getElementById('mekanListeIcerik');
+            ul.innerHTML = '';
+            globalMekanlar.forEach(m => {
+                ul.innerHTML += `<li onclick="mekanSecOdaklan(${m.id}, ${m.lat}, ${m.lng})">🏢 ${m.ad}</li>`;
+            });
+        }
+
+        function mekanSecOdaklan(id, lat, lng) {
+            document.getElementById('filtreMekanSelect').value = id;
+            map.setView([lat, lng], 14);
+            haritaVeTabloYenile();
+        }
+
+        function haritaVeTabloYenile() {
+            map.eachLayer((l) => { if (!!l.toGeoJSON && !l.toString().includes('TileLayer')) { map.removeLayer(l); } });
+
+            globalMekanlar.forEach(m => {
+                let mIslem = globalIslemler.filter(t => t.mekan_id == m.id);
+                let toplamBorc = mIslem.reduce((sum, c) => sum + parseFloat(c.toplam || 0), 0);
+                let toplamOdenen = mIslem.reduce((sum, c) => sum + parseFloat(c.tahsilat || 0), 0); 
+                let guncelKalanBakiye = toplamBorc - toplamOdenen;
+
+                let uygunIkon = guncelKalanBakiye > 0 ? yesilIcon : maviIcon;
+
+                let popupIcerik = `
+                    <div style="font-family:sans-serif; min-width:160px;">
+                        <strong>${m.ad}</strong><hr style="margin:4px 0;">
+                        💰 Toplam Sevk: ${topor(toplamBorc)} TL<br>
+                        💵 Toplam Tahsilat: ${topor(toplamOdenen)} TL<br><hr style="margin:4px 0;">
+                        🚨 <b>Kalan Bakiye: ${topor(guncelKalanBakiye)} TL</b>
+                    </div>
+                `;
+                let marker = L.marker([m.lat, m.lng], { icon: uygunIkon }).addTo(map).bindPopup(popupIcerik);
+                marker.bindTooltip(m.ad, { permanent: true, direction: 'bottom', className: 'custom-pin-label' });
+            });
+
+            const filtreMekan = document.getElementById('filtreMekanSelect').value;
+            const baslangic = document.getElementById('filtreBaslangic').value;
+            const bitis = document.getElementById('filtreBitis').value;
+
+            let filtrelenmis = globalIslemler.filter(t => t.tarih >= baslangic && t.tarih <= bitis);
+            
+            const varOlanOzet = document.getElementById('dinamikMekanOzet');
+            if(varOlanOzet) varOlanOzet.remove();
+
+            if(filtreMekan !== "hepsi") {
+                filtrelenmis = filtrelenmis.filter(t => t.mekan_id == parseInt(filtreMekan));
+                let m = globalMekanlar.find(x => x.id == parseInt(filtreMekan));
+                document.getElementById('tabloBaslik').innerText = `${m ? m.ad : ''} - Cari Hesap Akış Tablosu`;
+
+                // 5 Modele Göre Mekandaki Güncel Çanta Hesaplama Motoru
+                let mIslemler = globalIslemler.filter(t => t.mekan_id == parseInt(filtreMekan));
+                let tLeo = mIslemler.reduce((sum, item) => sum + (parseInt(item.leopar) || 0), 0);
+                let tNor = mIslemler.reduce((sum, item) => sum + (parseInt(item.normal) || 0), 0);
+                let tMic = mIslemler.reduce((sum, item) => sum + (parseInt(item.micat) || 0), 0);
+                let tKor = mIslemler.reduce((sum, item) => sum + (parseInt(item.k_altkoruklu) || 0), 0);
+                let tHam = mIslemler.reduce((sum, item) => sum + (parseInt(item.hambez) || 0), 0);
+                let tNet = tLeo + tNor + tMic + tKor + tHam;
+
+                let ozetDiv = document.createElement('div');
+                ozetDiv.id = 'dinamikMekanOzet';
+                ozetDiv.className = 'mekan-ozet-kutusu';
+                ozetDiv.innerHTML = `📦 <b>Mekandaki Net Ürünler:</b> Leo: <b>${tLeo}</b> | Rest: <b>${tNor}</b> | MiCat: <b>${tMic}</b> | Körük: <b>${tKor}</b> | Ham: <b>${tHam}</b> | <b>Toplam: ${tNet} Adet</b>`;
+                document.getElementById('tabloBaslikKapsayici').appendChild(ozetDiv);
+
+            } else {
+                document.getElementById('tabloBaslik').innerText = "Tüm Mekanlar - Dönemlik Cari ve Dağıtım Dökümü";
+            }
+
+            const tbody = document.getElementById('tabloGövde');
+            tbody.innerHTML = '';
+
+            if(filtrelenmis.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:#95a5a6;">Kriterlere uygun işlem dökümü bulunamadı.</td></tr>`;
+                return;
+            }
+
+            filtrelenmis.forEach(t => {
+                let m = globalMekanlar.find(x => x.id == t.mekan_id);
+                
+                let mTumZamanlar = globalIslemler.filter(x => x.mekan_id == t.mekan_id);
+                let mBorc = mTumZamanlar.reduce((sum, c) => sum + parseFloat(c.toplam || 0), 0);
+                let mOdenen = mTumZamanlar.reduce((sum, c) => sum + parseFloat(c.tahsilat || 0), 0);
+                let kalanBakiye = mBorc - mOdenen;
+
+                let fTarih = t.tarih.split('-').reverse().join('.');
+                let isTahsilat = (parseFloat(t.toplam || 0) === 0 && parseFloat(t.tahsilat || 0) > 0);
+
+                let tr = document.createElement('tr');
+                if(isTahsilat) {
+                    tr.innerHTML = `
+                        <td style="font-weight:600;">${fTarih}</td>
+                        <td style="color:#2980b9; font-weight:600;">${m ? m.ad : 'Bilinmeyen'}</td>
+                        <td colspan="5" style="text-align:center; color:#d4a373; font-weight:bold; background:#fffdf0; letter-spacing:1px;">💵 NAKİT / HAVALE TAHSİLAT</td>
+                        <td style="font-weight:bold; text-align:center;">-</td>
+                        <td>0 TL</td>
+                        <td style="font-weight:bold; color:#27ae60; background:#edf9f0;">+${parseFloat(t.tahsilat)} TL</td>
+                        <td style="font-weight:bold; color:#c0392b;">${topor(kalanBakiye)} TL</td>
+                    `;
+                } else {
+                    let netCanta = parseInt(t.leopar||0) + parseInt(t.normal||0) + parseInt(t.micat||0) + parseInt(t.k_altkoruklu||0) + parseInt(t.hambez||0);
+                    
+                    tr.innerHTML = `
+                        <td>${fTarih}</td>
+                        <td style="color:#2980b9; font-weight:600;">${m ? m.ad : 'Bilinmeyen'}</td>
+                        <td><span class="satis-text">${Math.max(0, t.leopar || 0)}</span> <span class="iade-text">${t.leopar < 0 ? ' ('+t.leopar+')' : ''}</span></td>
+                        <td><span class="satis-text">${Math.max(0, t.normal || 0)}</span> <span class="iade-text">${t.normal < 0 ? ' ('+t.normal+')' : ''}</span></td>
+                        <td><span class="satis-text">${Math.max(0, t.micat || 0)}</span> <span class="iade-text">${t.micat < 0 ? ' ('+t.micat+')' : ''}</span></td>
+                        <td><span class="satis-text">${Math.max(0, t.k_altkoruklu || 0)}</span> <span class="iade-text">${t.k_altkoruklu < 0 ? ' ('+t.k_altkoruklu+')' : ''}</span></td>
+                        <td><span class="satis-text">${Math.max(0, t.hambez || 0)}</span> <span class="iade-text">${t.hambez < 0 ? ' ('+t.hambez+')' : ''}</span></td>
+                        <td style="font-weight:bold;">${netCanta} Adet</td>
+                        <td style="font-weight:bold; color:#2c3e50;">${parseFloat(t.toplam || 0)} TL</td>
+                        <td style="color:#7f8c8d;">0 TL</td>
+                        <td style="font-weight:bold; color:#c0392b;">${topor(kalanBakiye)} TL</td>
+                    `;
+                }
+                tbody.appendChild(tr);
+            });
+
+            let dönemselCiro = filtrelenmis.reduce((sum, c) => sum + parseFloat(c.toplam || 0), 0);
+            let dönemselTahsilat = filtrelenmis.reduce((sum, c) => sum + parseFloat(c.tahsilat || 0), 0);
+            document.getElementById('genelRapor').innerHTML = `
+                <strong>Dönem Özeti:</strong> Sevk: ${topor(dönemselCiro)} TL / Tahsilat: <span style="color:#27ae60">${topor(dönemselTahsilat)} TL</span>
+            `;
+        }
+
+        async function teslimatKaydet() {
+            const mekanId = parseInt(document.getElementById('teslimatMekan').value);
+            const tarih = document.getElementById('teslimatTarihi').value;
+            
+            if(!mekanId || !tarih) { alert('Mekan ve tarih eksik!'); return; }
+
+            const c_leo = parseInt(document.getElementById('c_leopar').value) || 0;
+            const c_nor = parseInt(document.getElementById('c_normal').value) || 0;
+            const c_mic = parseInt(document.getElementById('c_micat').value) || 0;
+            const c_kor = parseInt(document.getElementById('c_k_altkoruklu').value) || 0;
+            const c_ham = parseInt(document.getElementById('c_hambez').value) || 0;
+
+            const i_leo = parseInt(document.getElementById('i_leopar').value) || 0;
+            const i_nor = parseInt(document.getElementById('i_normal').value) || 0;
+            const i_mic = parseInt(document.getElementById('i_micat').value) || 0;
+            const i_kor = parseInt(document.getElementById('i_k_altkoruklu').value) || 0;
+            const i_ham = parseInt(document.getElementById('i_hambez').value) || 0;
+            
+            const netLeopar = c_leo - i_leo;
+            const netNormal = c_nor - i_nor;
+            const netMicat = c_mic - i_mic;
+            const netKoruklu = c_kor - i_kor;
+            const netHambez = c_ham - i_ham;
+
+            // 5 Modelin Güncel Fiyat Matrisi ile Toplam Tutar Hesabı
+            const toplamTutar = (netLeopar * FIYATLAR.leopar) + (netNormal * FIYATLAR.normal) + (netMicat * FIYATLAR.micat) + (netKoruklu * FIYATLAR.k_altkoruklu) + (netHambez * FIYATLAR.hambez);
+
+            const { error } = await _supabase.from('teslimatlar').insert([
+                { 
+                    mekan_id: mekanId, 
+                    tarih: tarih, 
+                    leopar: netLeopar, 
+                    normal: netNormal,
+                    micat: netMicat, 
+                    k_altkoruklu: netKoruklu,
+                    hambez: netHambez, 
+                    toplam: toplamTutar, 
+                    tahsilat: 0 
+                }
+            ]);
+
+            if(error) {
+                alert('Dağıtım kaydedilirken sunucu hatası oluştu!');
+                console.error("Supabase Hatası:", error.message);
+            } else {
+                clearInputs(['c_leopar','c_normal','c_micat','c_k_altkoruklu','c_hambez','i_leopar','i_normal','i_micat','i_k_altkoruklu','i_hambez']);
+                await verileriYukle();
+                alert('Dağıtım/İade başarıyla sunucuya işlendi!');
+            }
+        }
+
+        async function tahsilatKaydet() {
+            const mekanId = parseInt(document.getElementById('teslimatMekan').value); 
+            const miktar = parseFloat(document.getElementById('tahsilatMiktar').value);
+            const tarih = document.getElementById('tahsilatTarihi').value;
+
+            if(!mekanId || isNaN(miktar) || miktar <= 0 || !tarih) { 
+                alert('Lütfen mekan seçimini kontrol edin, geçerli bir tutar ve tarih girin!'); 
+                return; 
+            }
+
+            const { error } = await _supabase.from('teslimatlar').insert([
+                { 
+                    mekan_id: mekanId, 
+                    tarih: tarih, 
+                    leopar: 0, 
+                    normal: 0,
+                    micat: 0, 
+                    k_altkoruklu: 0,
+                    hambez: 0, 
+                    toplam: 0, 
+                    tahsilat: miktar 
+                }
+            ]);
+
+            if(error) {
+                alert('Tahsilat kaydedilirken sunucu hatası oluştu!');
+                console.error("Supabase Hatası:", error.message);
+            } else {
+                document.getElementById('tahsilatMiktar').value = '';
+                await verileriYukle(); 
+                alert('Ödeme başarıyla sunucuya kaydedildi ve cariye işlendi!');
+            }
+        }
+
         async function mekanEkle() {
             const ad = document.getElementById('mekanAdi').value;
             const lat = parseFloat(document.getElementById('lat').value);
             const lng = parseFloat(document.getElementById('lng').value);
-
-            if(!ad || !lat || !lng) { alert('Lütfen tüm alanları doldurun!'); return; }
+            
+            if(!ad || isNaN(lat) || isNaN(lng)) { alert('Lütfen mekan adını girin ve haritaya tıklayarak Enlem/Boylam alanlarını doldurun!'); return; }
 
             const { error } = await _supabase.from('mekanlar').insert([{ ad: ad, lat: lat, lng: lng }]);
-            
-            if(error) {
-                alert('Hata oluştu! Supabase panelinden RLS politikasını kapatmayı (Disable RLS) unutmayın.');
-                console.error(error);
+            if(error) { 
+                console.error(error); 
             } else {
                 document.getElementById('mekanAdi').value = '';
                 document.getElementById('lat').value = '';
                 document.getElementById('lng').value = '';
                 await verileriYukle();
-                alert(`${ad} başarıyla bulut veri tabanına kaydedildi!`);
+                alert(`${ad} başarıyla kaydedildi!`);
             }
         }
 
-        // Buluta yeni teslimat kaydetme
-        async function teslimatKaydet() {
-            const mekanId = parseInt(document.getElementById('teslimatMekan').value);
-            const tarih = document.getElementById('teslimatTarihi').value;
-            const deri = parseInt(document.getElementById('c_deri').value) || 0;
-            const kumas = parseInt(document.getElementById('c_kumas').value) || 0;
-            const suet = parseInt(document.getElementById('c_suet').value) || 0;
-            const spor = parseInt(document.getElementById('c_spor').value) || 0;
-
-            if(!mekanId || !tarih) { alert('Mekan ve tarih seçin!'); return; }
-
-            const toplam = (deri * FIYATLAR.deri) + (kumas * FIYATLAR.kumas) + (suet * FIYATLAR.suet) + (spor * FIYATLAR.spor);
-
-            const { error } = await _supabase.from('teslimatlar').insert([
-                { mekan_id: mekanId, tarih: tarih, deri: deri, kumas: kumas, suet: suet, spor: spor, toplam: toplam }
-            ]);
-
-            if(error) {
-                alert('Teslimat kaydedilemedi. RLS politikasını kontrol edin.');
-                console.error(error);
-            } else {
-                document.getElementById('c_deri').value = 0;
-                document.getElementById('c_kumas').value = 0;
-                document.getElementById('c_suet').value = 0;
-                document.getElementById('c_spor').value = 0;
-                await verileriYukle();
-                alert('Teslimat buluta işlendi ve harita güncellendi!');
-            }
-        }
-
-        // Canlı veri tabanından tarih aralığı raporu çekme
-        async function raporla() {
-            const baslangic = document.getElementById('filtreBaslangic').value;
-            const bitis = document.getElementById('filtreBitis').value;
-
-            let { data: filtrelenmis, error } = await _supabase
-                .from('teslimatlar')
-                .select('*')
-                .gte('tarih', baslangic)
-                .lte('tarih', bitis);
-
-            if(error) { console.error(error); return; }
-
-            let toplamCiro = filtrelenmis.reduce((sum, c) => sum + parseFloat(c.toplam), 0);
-            let toplamCanta = filtrelenmis.reduce((sum, c) => sum + (parseInt(c.deri||0) + parseInt(c.kumas||0) + parseInt(c.suet||0) + parseInt(c.spor||0)), 0);
-
-            document.getElementById('genelRapor').innerHTML = `
-                <strong>Seçili Dönem Özeti:</strong><br>
-                📦 Dağıtılan Çanta: ${toplamCanta} adet<br>
-                💰 Toplam Ciro: <span style="color:#2ecc71">${toplamCiro} TL</span>
-            `;
+        function topor(num) { return parseFloat(num || 0).toFixed(0); }
+        function clearInputs(arr) { arr.forEach(id => document.getElementById(id).value = 0); }
+        function raporla() { haritaVeTabloYenile(); }
+        function toggleMekanListesi() {
+            const icerik = document.getElementById('mekanListeIcerik');
+            icerik.style.display = icerik.style.display === 'none' ? 'block' : 'none';
         }
     </script>
 </body>
